@@ -42,7 +42,7 @@ const CONFIG = {
     candyColors: ['#FF0000', '#FFFFFF']
   },
   counts: {
-    foliage: 15000,
+    foliage: 6000,
     ornaments: 300,   // 拍立得照片数量
     elements: 200,    // 圣诞元素数量
     lights: 400       // 彩灯数量
@@ -378,10 +378,27 @@ const TopStar = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
     </group>
   );
 };
+// --- 新增：封装好的单棵树组件 ---
+const TreeGroup = ({ state, position, scale = 1 }: { state: 'CHAOS' | 'FORMED', position: [number, number, number], scale?: number }) => {
+  return (
+    <group position={position} scale={[scale, scale, scale]}>
+      <Foliage state={state} />
+      <Suspense fallback={null}>
+        <PhotoOrnaments state={state} />
+        <ChristmasElements state={state} />
+        <FairyLights state={state} />
+        <TopStar state={state} />
+      </Suspense>
+      {/* 每个树都有自己的光点，数量随大小调整 */}
+      <Sparkles count={Math.floor(400 * scale)} scale={50 * scale} size={8} speed={0.4} opacity={0.4} color={CONFIG.colors.silver} />
+    </group>
+  );
+};
 
-// --- Main Scene Experience ---
+// --- Main Scene Experience (修改后：森林版) ---
 const Experience = ({ sceneState, rotationSpeed }: { sceneState: 'CHAOS' | 'FORMED', rotationSpeed: number }) => {
   const controlsRef = useRef<any>(null);
+  
   useFrame(() => {
     if (controlsRef.current) {
       controlsRef.current.setAzimuthalAngle(controlsRef.current.getAzimuthalAngle() + rotationSpeed);
@@ -389,10 +406,30 @@ const Experience = ({ sceneState, rotationSpeed }: { sceneState: 'CHAOS' | 'FORM
     }
   });
 
+  // --- 森林布局配置 ---
+  // [x, y, z] 坐标：y 建议保持一致，z 越小越远
+  const forestLayout = [
+    // 1. 核心主树 (最大，最近，C位)
+    { pos: [0, -10, 0], scale: 1.0 },
+
+    // 2. 左后方陪衬树 (稍小，稍远)
+    { pos: [-35, -10, -20], scale: 0.7 },
+
+    // 3. 右后方陪衬树 (稍小，稍远)
+    { pos: [35, -10, -25], scale: 0.65 },
+
+    // 4. 远景左侧 (更小，很远)
+    { pos: [-20, -10, -50], scale: 0.5 },
+
+    // 5. 远景右侧 (更小，很远)
+    { pos: [25, -10, -60], scale: 0.45 },
+  ];
+
   return (
     <>
       <PerspectiveCamera makeDefault position={[0, 8, 60]} fov={45} />
-      <OrbitControls ref={controlsRef} enablePan={false} enableZoom={true} minDistance={30} maxDistance={120} autoRotate={rotationSpeed === 0 && sceneState === 'FORMED'} autoRotateSpeed={0.3} maxPolarAngle={Math.PI / 1.7} />
+      {/* 调整了 maxDistance 让你可以拉得更远看全景 */}
+      <OrbitControls ref={controlsRef} enablePan={false} enableZoom={true} minDistance={20} maxDistance={200} autoRotate={rotationSpeed === 0 && sceneState === 'FORMED'} autoRotateSpeed={0.3} maxPolarAngle={Math.PI / 1.7} />
 
       <color attach="background" args={['#000300']} />
       <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
@@ -403,19 +440,19 @@ const Experience = ({ sceneState, rotationSpeed }: { sceneState: 'CHAOS' | 'FORM
       <pointLight position={[-30, 10, -30]} intensity={50} color={CONFIG.colors.gold} />
       <pointLight position={[0, -20, 10]} intensity={30} color="#ffffff" />
 
-      <group position={[0, -6, 0]}>
-        <Foliage state={sceneState} />
-        <Suspense fallback={null}>
-           <PhotoOrnaments state={sceneState} />
-           <ChristmasElements state={sceneState} />
-           <FairyLights state={sceneState} />
-           <TopStar state={sceneState} />
-        </Suspense>
-        <Sparkles count={600} scale={50} size={8} speed={0.4} opacity={0.4} color={CONFIG.colors.silver} />
-      </group>
+      {/* 渲染森林 */}
+      {forestLayout.map((tree, index) => (
+        <TreeGroup 
+          key={index}
+          state={sceneState} 
+          position={tree.pos as [number, number, number]} 
+          scale={tree.scale} 
+        />
+      ))}
 
       <EffectComposer>
-        <Bloom luminanceThreshold={0.8} luminanceSmoothing={0.1} intensity={1.5} radius={0.5} mipmapBlur />
+        {/* 稍微调整光晕，避免多棵树在一起太亮 */}
+        <Bloom luminanceThreshold={0.8} luminanceSmoothing={0.1} intensity={1.2} radius={0.5} mipmapBlur />
         <Vignette eskil={false} offset={0.1} darkness={1.2} />
       </EffectComposer>
     </>
