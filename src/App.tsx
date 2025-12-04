@@ -47,7 +47,7 @@ const CONFIG = {
     elements: 200,    // 圣诞元素数量
     lights: 400       // 彩灯数量
   },
-  tree: { height: 22, radius: 9 }, // 树体尺寸
+  tree: { height: 38, radius: 15 }, // 树体尺寸
   photos: {
     // top 属性不再需要，因为已经移入 body
     body: bodyPhotoPaths
@@ -554,13 +554,13 @@ export default function GrandTreeApp() {
       {/* 背景音乐播放器 */}
       <audio ref={audioRef} src="/bgm.mp3" loop />
       
-      {/* 音乐开关按钮 */}
+      {/* --- 修改：左上角音乐开关按钮 (防止遮挡 Debug 画面) --- */}
       <button 
         onClick={toggleMusic}
         style={{
           position: 'absolute',
           top: '20px',
-          right: '20px',
+          left: '20px',  // <--- 关键修改：从 right 改成了 left
           zIndex: 20,
           width: '40px',
           height: '40px',
