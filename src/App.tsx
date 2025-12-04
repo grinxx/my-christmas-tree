@@ -16,9 +16,8 @@ import { MathUtils } from 'three';
 import * as random from 'maath/random';
 import { GestureRecognizer, FilesetResolver, DrawingUtils } from "@mediapipe/tasks-vision";
 
-// --- 动态生成照片列表 (top.jpg + 1.jpg 到 31.jpg) ---
+// --- 动态生成照片列表 ---
 const TOTAL_NUMBERED_PHOTOS = 31;
-// 修改：将 top.jpg 加入到数组开头
 const bodyPhotoPaths = [
   '/photos/top.jpg',
   ...Array.from({ length: TOTAL_NUMBERED_PHOTOS }, (_, i) => `/photos/${i + 1}.jpg`)
@@ -27,29 +26,26 @@ const bodyPhotoPaths = [
 // --- 视觉配置 ---
 const CONFIG = {
   colors: {
-    emerald: '#004225', // 纯正祖母绿
+    emerald: '#004225',
     gold: '#FFD700',
     silver: '#ECEFF1',
     red: '#D32F2F',
     green: '#2E7D32',
-    white: '#FFFFFF',   // 纯白色
+    white: '#FFFFFF',
     warmLight: '#FFD54F',
-    lights: ['#FF0000', '#00FF00', '#0000FF', '#FFFF00'], // 彩灯
-    // 拍立得边框颜色池 (复古柔和色系)
+    lights: ['#FF0000', '#00FF00', '#0000FF', '#FFFF00'],
     borders: ['#FFFAF0', '#F0E68C', '#E6E6FA', '#FFB6C1', '#98FB98', '#87CEFA', '#FFDAB9'],
-    // 圣诞元素颜色
-    giftColors: ['#D32F2F', '#FFD700', '#1976D2', '#2E7D32'],
-    candyColors: ['#FF0000', '#FFFFFF']
+    giftColors: ['#B71C1C', '#1A237E', '#004D40', '#F57F17', '#4A148C'], // 更深邃的高级礼物色
+    ribbonColors: ['#FFD700', '#C0C0C0', '#FFFFFF']
   },
   counts: {
-    foliage: 6000,
-    ornaments: 300,   // 拍立得照片数量
-    elements: 200,    // 圣诞元素数量
-    lights: 400       // 彩灯数量
+    foliage: 7000,    // <--- 优化：降低到 7000 以保证 3 棵树流畅运行
+    ornaments: 200,   // 每棵树的照片数
+    elements: 150,
+    lights: 300
   },
-  tree: { height: 38, radius: 15 }, // 树体尺寸
+  tree: { height: 32, radius: 12 }, // 树稍微调高大一点
   photos: {
-    // top 属性不再需要，因为已经移入 body
     body: bodyPhotoPaths
   }
 };
@@ -123,12 +119,11 @@ const Foliage = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   );
 };
 
-// --- Component: Photo Ornaments (Double-Sided Polaroid) ---
+// --- Component: Photo Ornaments ---
 const PhotoOrnaments = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   const textures = useTexture(CONFIG.photos.body);
   const count = CONFIG.counts.ornaments;
   const groupRef = useRef<THREE.Group>(null);
-
   const borderGeometry = useMemo(() => new THREE.PlaneGeometry(1.2, 1.5), []);
   const photoGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1), []);
 
@@ -140,28 +135,16 @@ const PhotoOrnaments = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
       const currentRadius = (rBase * (1 - (y + (h/2)) / h)) + 0.5;
       const theta = Math.random() * Math.PI * 2;
       const targetPos = new THREE.Vector3(currentRadius * Math.cos(theta), y, currentRadius * Math.sin(theta));
-
       const isBig = Math.random() < 0.2;
       const baseScale = isBig ? 2.2 : 0.8 + Math.random() * 0.6;
       const weight = 0.8 + Math.random() * 1.2;
       const borderColor = CONFIG.colors.borders[Math.floor(Math.random() * CONFIG.colors.borders.length)];
-
-      const rotationSpeed = {
-        x: (Math.random() - 0.5) * 1.0,
-        y: (Math.random() - 0.5) * 1.0,
-        z: (Math.random() - 0.5) * 1.0
-      };
-      const chaosRotation = new THREE.Euler(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
-
       return {
         chaosPos, targetPos, scale: baseScale, weight,
-        textureIndex: i % textures.length,
-        borderColor,
+        textureIndex: i % textures.length, borderColor,
         currentPos: chaosPos.clone(),
-        chaosRotation,
-        rotationSpeed,
-        wobbleOffset: Math.random() * 10,
-        wobbleSpeed: 0.5 + Math.random() * 0.5
+        chaosRotation: new THREE.Euler(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI),
+        rotationSpeed: { x: (Math.random()-0.5), y: (Math.random()-0.5), z: (Math.random()-0.5) }
       };
     });
   }, [textures, count]);
@@ -169,28 +152,16 @@ const PhotoOrnaments = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   useFrame((stateObj, delta) => {
     if (!groupRef.current) return;
     const isFormed = state === 'FORMED';
-    const time = stateObj.clock.elapsedTime;
-
     groupRef.current.children.forEach((group, i) => {
       const objData = data[i];
       const target = isFormed ? objData.targetPos : objData.chaosPos;
-
       objData.currentPos.lerp(target, delta * (isFormed ? 0.8 * objData.weight : 0.5));
       group.position.copy(objData.currentPos);
-
       if (isFormed) {
-         const targetLookPos = new THREE.Vector3(group.position.x * 2, group.position.y + 0.5, group.position.z * 2);
-         group.lookAt(targetLookPos);
-
-         const wobbleX = Math.sin(time * objData.wobbleSpeed + objData.wobbleOffset) * 0.05;
-         const wobbleZ = Math.cos(time * objData.wobbleSpeed * 0.8 + objData.wobbleOffset) * 0.05;
-         group.rotation.x += wobbleX;
-         group.rotation.z += wobbleZ;
-
+         group.lookAt(new THREE.Vector3(group.position.x * 2, group.position.y, group.position.z * 2));
       } else {
          group.rotation.x += delta * objData.rotationSpeed.x;
          group.rotation.y += delta * objData.rotationSpeed.y;
-         group.rotation.z += delta * objData.rotationSpeed.z;
       }
     });
   });
@@ -199,32 +170,17 @@ const PhotoOrnaments = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
     <group ref={groupRef}>
       {data.map((obj, i) => (
         <group key={i} scale={[obj.scale, obj.scale, obj.scale]} rotation={state === 'CHAOS' ? obj.chaosRotation : [0,0,0]}>
-          {/* 正面 */}
           <group position={[0, 0, 0.015]}>
             <mesh geometry={photoGeometry}>
-              <meshStandardMaterial
-                map={textures[obj.textureIndex]}
-                roughness={0.5} metalness={0}
-                emissive={CONFIG.colors.white} emissiveMap={textures[obj.textureIndex]} emissiveIntensity={1.0}
-                side={THREE.FrontSide}
-              />
+              <meshStandardMaterial map={textures[obj.textureIndex]} roughness={0.5} emissive={CONFIG.colors.white} emissiveMap={textures[obj.textureIndex]} emissiveIntensity={1.0} side={THREE.FrontSide} />
             </mesh>
             <mesh geometry={borderGeometry} position={[0, -0.15, -0.01]}>
-              <meshStandardMaterial color={obj.borderColor} roughness={0.9} metalness={0} side={THREE.FrontSide} />
+              <meshStandardMaterial color={obj.borderColor} roughness={0.9} side={THREE.FrontSide} />
             </mesh>
           </group>
-          {/* 背面 */}
           <group position={[0, 0, -0.015]} rotation={[0, Math.PI, 0]}>
-            <mesh geometry={photoGeometry}>
-              <meshStandardMaterial
-                map={textures[obj.textureIndex]}
-                roughness={0.5} metalness={0}
-                emissive={CONFIG.colors.white} emissiveMap={textures[obj.textureIndex]} emissiveIntensity={1.0}
-                side={THREE.FrontSide}
-              />
-            </mesh>
-            <mesh geometry={borderGeometry} position={[0, -0.15, -0.01]}>
-              <meshStandardMaterial color={obj.borderColor} roughness={0.9} metalness={0} side={THREE.FrontSide} />
+             <mesh geometry={borderGeometry} position={[0, -0.15, -0.01]}>
+              <meshStandardMaterial color={obj.borderColor} roughness={0.9} side={THREE.FrontSide} />
             </mesh>
           </group>
         </group>
@@ -233,57 +189,46 @@ const PhotoOrnaments = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   );
 };
 
-// --- Component: Christmas Elements ---
+// --- Component: Christmas Elements (Candy & Ornaments) ---
 const ChristmasElements = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   const count = CONFIG.counts.elements;
   const groupRef = useRef<THREE.Group>(null);
-
   const boxGeometry = useMemo(() => new THREE.BoxGeometry(0.8, 0.8, 0.8), []);
   const sphereGeometry = useMemo(() => new THREE.SphereGeometry(0.5, 16, 16), []);
-  const caneGeometry = useMemo(() => new THREE.CylinderGeometry(0.15, 0.15, 1.2, 8), []);
 
   const data = useMemo(() => {
     return new Array(count).fill(0).map(() => {
       const chaosPos = new THREE.Vector3((Math.random()-0.5)*60, (Math.random()-0.5)*60, (Math.random()-0.5)*60);
-      const h = CONFIG.tree.height;
-      const y = (Math.random() * h) - (h / 2);
+      const h = CONFIG.tree.height; const y = (Math.random() * h) - (h / 2);
       const rBase = CONFIG.tree.radius;
       const currentRadius = (rBase * (1 - (y + (h/2)) / h)) * 0.95;
       const theta = Math.random() * Math.PI * 2;
-
       const targetPos = new THREE.Vector3(currentRadius * Math.cos(theta), y, currentRadius * Math.sin(theta));
-
-      const type = Math.floor(Math.random() * 3);
-      let color; let scale = 1;
-      if (type === 0) { color = CONFIG.colors.giftColors[Math.floor(Math.random() * CONFIG.colors.giftColors.length)]; scale = 0.8 + Math.random() * 0.4; }
-      else if (type === 1) { color = CONFIG.colors.giftColors[Math.floor(Math.random() * CONFIG.colors.giftColors.length)]; scale = 0.6 + Math.random() * 0.4; }
-      else { color = Math.random() > 0.5 ? CONFIG.colors.red : CONFIG.colors.white; scale = 0.7 + Math.random() * 0.3; }
-
-      const rotationSpeed = { x: (Math.random()-0.5)*2.0, y: (Math.random()-0.5)*2.0, z: (Math.random()-0.5)*2.0 };
-      return { type, chaosPos, targetPos, color, scale, currentPos: chaosPos.clone(), chaosRotation: new THREE.Euler(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI), rotationSpeed };
+      const type = Math.random() > 0.5 ? 0 : 1; // 0 box, 1 sphere
+      const color = CONFIG.colors.giftColors[Math.floor(Math.random() * CONFIG.colors.giftColors.length)];
+      return { type, chaosPos, targetPos, color, currentPos: chaosPos.clone(), chaosRotation: new THREE.Euler(Math.random()*Math.PI, Math.random(), 0) };
     });
-  }, [boxGeometry, sphereGeometry, caneGeometry]);
+  }, [boxGeometry, sphereGeometry]);
 
   useFrame((_, delta) => {
     if (!groupRef.current) return;
     const isFormed = state === 'FORMED';
-    groupRef.current.children.forEach((child, i) => {
-      const mesh = child as THREE.Mesh;
+    groupRef.current.children.forEach((mesh, i) => {
       const objData = data[i];
       const target = isFormed ? objData.targetPos : objData.chaosPos;
       objData.currentPos.lerp(target, delta * 1.5);
       mesh.position.copy(objData.currentPos);
-      mesh.rotation.x += delta * objData.rotationSpeed.x; mesh.rotation.y += delta * objData.rotationSpeed.y; mesh.rotation.z += delta * objData.rotationSpeed.z;
+      if(!isFormed) mesh.rotation.x += delta;
     });
   });
 
   return (
     <group ref={groupRef}>
-      {data.map((obj, i) => {
-        let geometry; if (obj.type === 0) geometry = boxGeometry; else if (obj.type === 1) geometry = sphereGeometry; else geometry = caneGeometry;
-        return ( <mesh key={i} scale={[obj.scale, obj.scale, obj.scale]} geometry={geometry} rotation={obj.chaosRotation}>
-          <meshStandardMaterial color={obj.color} roughness={0.3} metalness={0.4} emissive={obj.color} emissiveIntensity={0.2} />
-        </mesh> )})}
+      {data.map((obj, i) => (
+        <mesh key={i} geometry={obj.type === 0 ? boxGeometry : sphereGeometry} rotation={obj.chaosRotation}>
+          <meshStandardMaterial color={obj.color} roughness={0.3} metalness={0.6} emissive={obj.color} emissiveIntensity={0.3} />
+        </mesh>
+      ))}
     </group>
   );
 };
@@ -293,19 +238,17 @@ const FairyLights = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   const count = CONFIG.counts.lights;
   const groupRef = useRef<THREE.Group>(null);
   const geometry = useMemo(() => new THREE.SphereGeometry(0.8, 8, 8), []);
-
   const data = useMemo(() => {
     return new Array(count).fill(0).map(() => {
       const chaosPos = new THREE.Vector3((Math.random()-0.5)*60, (Math.random()-0.5)*60, (Math.random()-0.5)*60);
-      const h = CONFIG.tree.height; const y = (Math.random() * h) - (h / 2); const rBase = CONFIG.tree.radius;
+      const h = CONFIG.tree.height; const y = (Math.random() * h) - (h / 2);
+      const rBase = CONFIG.tree.radius;
       const currentRadius = (rBase * (1 - (y + (h/2)) / h)) + 0.3; const theta = Math.random() * Math.PI * 2;
       const targetPos = new THREE.Vector3(currentRadius * Math.cos(theta), y, currentRadius * Math.sin(theta));
       const color = CONFIG.colors.lights[Math.floor(Math.random() * CONFIG.colors.lights.length)];
-      const speed = 2 + Math.random() * 3;
-      return { chaosPos, targetPos, color, speed, currentPos: chaosPos.clone(), timeOffset: Math.random() * 100 };
+      return { chaosPos, targetPos, color, speed: 2 + Math.random()*3, currentPos: chaosPos.clone(), timeOffset: Math.random()*100 };
     });
   }, []);
-
   useFrame((stateObj, delta) => {
     if (!groupRef.current) return;
     const isFormed = state === 'FORMED';
@@ -320,7 +263,6 @@ const FairyLights = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
       if (mesh.material) { (mesh.material as THREE.MeshStandardMaterial).emissiveIntensity = isFormed ? 3 + intensity * 4 : 0; }
     });
   });
-
   return (
     <group ref={groupRef}>
       {data.map((obj, i) => ( <mesh key={i} scale={[0.15, 0.15, 0.15]} geometry={geometry}>
@@ -330,10 +272,9 @@ const FairyLights = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   );
 };
 
-// --- Component: Top Star (No Photo, Pure Gold 3D Star) ---
+// --- Component: Top Star ---
 const TopStar = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   const groupRef = useRef<THREE.Group>(null);
-
   const starShape = useMemo(() => {
     const shape = new THREE.Shape();
     const outerRadius = 1.3; const innerRadius = 0.7; const points = 5;
@@ -342,26 +283,9 @@ const TopStar = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
       const angle = (i / (points * 2)) * Math.PI * 2 - Math.PI / 2;
       i === 0 ? shape.moveTo(radius*Math.cos(angle), radius*Math.sin(angle)) : shape.lineTo(radius*Math.cos(angle), radius*Math.sin(angle));
     }
-    shape.closePath();
-    return shape;
+    shape.closePath(); return shape;
   }, []);
-
-  const starGeometry = useMemo(() => {
-    return new THREE.ExtrudeGeometry(starShape, {
-      depth: 0.4, // 增加一点厚度
-      bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.1, bevelSegments: 3,
-    });
-  }, [starShape]);
-
-  // 纯金材质
-  const goldMaterial = useMemo(() => new THREE.MeshStandardMaterial({
-    color: CONFIG.colors.gold,
-    emissive: CONFIG.colors.gold,
-    emissiveIntensity: 1.5, // 适中亮度，既发光又有质感
-    roughness: 0.1,
-    metalness: 1.0,
-  }), []);
-
+  const starGeometry = useMemo(() => new THREE.ExtrudeGeometry(starShape, { depth: 0.4, bevelEnabled: true, bevelThickness: 0.1, bevelSize: 0.1, bevelSegments: 3 }), [starShape]);
   useFrame((_, delta) => {
     if (groupRef.current) {
       groupRef.current.rotation.y += delta * 0.5;
@@ -369,36 +293,174 @@ const TopStar = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
       groupRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), delta * 3);
     }
   });
-
   return (
     <group ref={groupRef} position={[0, CONFIG.tree.height / 2 + 1.8, 0]}>
       <Float speed={2} rotationIntensity={0.2} floatIntensity={0.2}>
-        <mesh geometry={starGeometry} material={goldMaterial} />
+        <mesh geometry={starGeometry}>
+           <meshStandardMaterial color={CONFIG.colors.gold} emissive={CONFIG.colors.gold} emissiveIntensity={1.5} roughness={0.1} metalness={1.0} />
+        </mesh>
       </Float>
     </group>
   );
 };
-// --- 新增：封装好的单棵树组件 ---
-const TreeGroup = ({ state, position, scale = 1 }: { state: 'CHAOS' | 'FORMED', position: [number, number, number], scale?: number }) => {
+
+// --- 新增：树下的礼物盒堆 (Ground Gifts) ---
+const GroundGifts = ({ state, treeRadius }: { state: 'CHAOS' | 'FORMED', treeRadius: number }) => {
+  const count = 15; // 每棵树下放 15 个礼物
+  const groupRef = useRef<THREE.Group>(null);
+  const boxGeo = useMemo(() => new THREE.BoxGeometry(1, 1, 1), []);
+  
+  const data = useMemo(() => {
+    return new Array(count).fill(0).map(() => {
+      // 随机分布在树根周围
+      const angle = Math.random() * Math.PI * 2;
+      const dist = Math.random() * (treeRadius * 0.8); // 散落在树底范围内
+      const x = Math.cos(angle) * dist;
+      const z = Math.sin(angle) * dist;
+      
+      const scale = 1.5 + Math.random() * 2.0; // 大小不一
+      const y = -CONFIG.tree.height / 2 + (scale * 0.5); // 放在地上
+      
+      const color = CONFIG.colors.giftColors[Math.floor(Math.random() * CONFIG.colors.giftColors.length)];
+      const ribbonColor = CONFIG.colors.ribbonColors[Math.floor(Math.random() * CONFIG.colors.ribbonColors.length)];
+      
+      const rotation = new THREE.Euler(0, Math.random() * Math.PI, 0);
+      
+      return { pos: [x, y, z], scale, color, ribbonColor, rotation };
+    });
+  }, [treeRadius]);
+
+  return (
+    <group ref={groupRef}>
+      {data.map((obj, i) => (
+        <group key={i} position={obj.pos as [number, number, number]} rotation={obj.rotation} scale={state === 'FORMED' ? obj.scale : 0}>
+           {/* 礼物盒子 */}
+           <mesh geometry={boxGeo}>
+             <meshStandardMaterial color={obj.color} roughness={0.4} metalness={0.2} />
+           </mesh>
+           {/* 丝带 (横竖两根) */}
+           <mesh position={[0, 0, 0]} scale={[1.02, 1.02, 0.2]}>
+              <boxGeometry />
+              <meshStandardMaterial color={obj.ribbonColor} roughness={0.2} metalness={0.5} />
+           </mesh>
+           <mesh position={[0, 0, 0]} scale={[0.2, 1.02, 1.02]}>
+              <boxGeometry />
+              <meshStandardMaterial color={obj.ribbonColor} roughness={0.2} metalness={0.5} />
+           </mesh>
+        </group>
+      ))}
+    </group>
+  );
+};
+
+// --- 新增：极简玩具圣诞老人 (Toy Santa) ---
+const ToySanta = ({ state, position }: { state: 'CHAOS' | 'FORMED', position: [number, number, number] }) => {
+  const groupRef = useRef<THREE.Group>(null);
+  
+  useFrame((stateObj) => {
+     if(groupRef.current && state === 'FORMED') {
+         // 让圣诞老人轻轻摇晃，像是不倒翁
+         const t = stateObj.clock.elapsedTime;
+         groupRef.current.rotation.z = Math.sin(t * 2) * 0.1;
+         groupRef.current.rotation.y = Math.sin(t * 1) * 0.1;
+     }
+  });
+
+  // 身体材质
+  const matRed = new THREE.MeshStandardMaterial({ color: '#D32F2F', roughness: 0.3 });
+  const matWhite = new THREE.MeshStandardMaterial({ color: '#FFFFFF', roughness: 0.8 });
+  const matFace = new THREE.MeshStandardMaterial({ color: '#FFCCBC', roughness: 0.5 }); // 肤色
+  const matBlack = new THREE.MeshStandardMaterial({ color: '#222222', roughness: 0.5 });
+
+  return (
+    <group ref={groupRef} position={position} scale={state === 'FORMED' ? 1.5 : 0}>
+      {/* 身体 (胖圆柱) */}
+      <mesh position={[0, 2.5, 0]}>
+         <cylinderGeometry args={[1.5, 2, 3, 16]} />
+         <primitive object={matRed} attach="material" />
+      </mesh>
+      {/* 裤子/腿 */}
+      <mesh position={[-0.8, 0.5, 0]}>
+         <cylinderGeometry args={[0.6, 0.6, 1.5, 16]} />
+         <primitive object={matRed} attach="material" />
+      </mesh>
+      <mesh position={[0.8, 0.5, 0]}>
+         <cylinderGeometry args={[0.6, 0.6, 1.5, 16]} />
+         <primitive object={matRed} attach="material" />
+      </mesh>
+      {/* 靴子 */}
+      <mesh position={[-0.8, -0.5, 0.2]}>
+         <boxGeometry args={[0.7, 0.5, 1]} />
+         <primitive object={matBlack} attach="material" />
+      </mesh>
+      <mesh position={[0.8, -0.5, 0.2]}>
+         <boxGeometry args={[0.7, 0.5, 1]} />
+         <primitive object={matBlack} attach="material" />
+      </mesh>
+      {/* 头 */}
+      <mesh position={[0, 4.5, 0]}>
+         <sphereGeometry args={[1.2, 32, 32]} />
+         <primitive object={matFace} attach="material" />
+      </mesh>
+      {/* 胡子 (大白球) */}
+      <mesh position={[0, 4.0, 0.8]}>
+         <sphereGeometry args={[0.8, 16, 16]} />
+         <primitive object={matWhite} attach="material" />
+      </mesh>
+      {/* 帽子 */}
+      <mesh position={[0, 5.5, 0]} rotation={[0.2, 0, 0]}>
+         <coneGeometry args={[1.3, 2.5, 32]} />
+         <primitive object={matRed} attach="material" />
+      </mesh>
+      {/* 胳膊 (挥手) */}
+      <group position={[1.8, 3.5, 0]} rotation={[0, 0, -0.5]}>
+         <mesh>
+            <capsuleGeometry args={[0.4, 1.5, 4, 8]} />
+            <primitive object={matRed} attach="material" />
+         </mesh>
+         <mesh position={[0, 0.8, 0]}>
+            <sphereGeometry args={[0.5]} />
+            <primitive object={matWhite} attach="material" />
+         </mesh>
+      </group>
+      <group position={[-1.8, 3.5, 0]} rotation={[0, 0, 0.5]}>
+         <mesh>
+            <capsuleGeometry args={[0.4, 1.5, 4, 8]} />
+            <primitive object={matRed} attach="material" />
+         </mesh>
+         <mesh position={[0, 0.8, 0]}>
+            <sphereGeometry args={[0.5]} />
+            <primitive object={matWhite} attach="material" />
+         </mesh>
+      </group>
+    </group>
+  );
+};
+
+// --- 封装好的单棵树组件 ---
+const TreeGroup = ({ state, position, scale = 1, showSanta = false }: { state: 'CHAOS' | 'FORMED', position: [number, number, number], scale?: number, showSanta?: boolean }) => {
   return (
     <group position={position} scale={[scale, scale, scale]}>
       <Foliage state={state} />
+      {/* 树下的礼物 */}
+      <GroundGifts state={state} treeRadius={CONFIG.tree.radius} />
+      {/* 圣诞老人 (只在主树显示) */}
+      {showSanta && <ToySanta state={state} position={[8, -CONFIG.tree.height/2 + 2, 5]} />}
+      
       <Suspense fallback={null}>
         <PhotoOrnaments state={state} />
         <ChristmasElements state={state} />
         <FairyLights state={state} />
         <TopStar state={state} />
       </Suspense>
-      {/* 每个树都有自己的光点，数量随大小调整 */}
-      <Sparkles count={Math.floor(400 * scale)} scale={50 * scale} size={8} speed={0.4} opacity={0.4} color={CONFIG.colors.silver} />
+      <Sparkles count={Math.floor(200 * scale)}cF scale={50 * scale} size={6} speed={0.4} opacity={0.4} color={CONFIG.colors.silver} />
     </group>
   );
 };
 
-// --- Main Scene Experience (修改后：森林版) ---
+// --- Main Scene Experience (3 Tree Layout) ---
 const Experience = ({ sceneState, rotationSpeed }: { sceneState: 'CHAOS' | 'FORMED', rotationSpeed: number }) => {
   const controlsRef = useRef<any>(null);
-  
   useFrame(() => {
     if (controlsRef.current) {
       controlsRef.current.setAzimuthalAngle(controlsRef.current.getAzimuthalAngle() + rotationSpeed);
@@ -406,30 +468,17 @@ const Experience = ({ sceneState, rotationSpeed }: { sceneState: 'CHAOS' | 'FORM
     }
   });
 
-  // --- 森林布局配置 ---
-  // [x, y, z] 坐标：y 建议保持一致，z 越小越远
+  // 3 棵树布局 (品字形：主树在前，两棵在后)
   const forestLayout = [
-    // 1. 核心主树 (最大，最近，C位)
-    { pos: [0, -10, 0], scale: 1.0 },
-
-    // 2. 左后方陪衬树 (稍小，稍远)
-    { pos: [-35, -10, -20], scale: 0.7 },
-
-    // 3. 右后方陪衬树 (稍小，稍远)
-    { pos: [35, -10, -25], scale: 0.65 },
-
-    // 4. 远景左侧 (更小，很远)
-    { pos: [-20, -10, -50], scale: 0.5 },
-
-    // 5. 远景右侧 (更小，很远)
-    { pos: [25, -10, -60], scale: 0.45 },
+    { pos: [0, -10, 0], scale: 1.0, santa: true },       // 主树
+    { pos: [-25, -10, -15], scale: 0.7, santa: false },  // 左后
+    { pos: [25, -10, -15], scale: 0.7, santa: false },   // 右后
   ];
 
   return (
     <>
       <PerspectiveCamera makeDefault position={[0, 8, 60]} fov={45} />
-      {/* 调整了 maxDistance 让你可以拉得更远看全景 */}
-      <OrbitControls ref={controlsRef} enablePan={false} enableZoom={true} minDistance={20} maxDistance={200} autoRotate={rotationSpeed === 0 && sceneState === 'FORMED'} autoRotateSpeed={0.3} maxPolarAngle={Math.PI / 1.7} />
+      <OrbitControls ref={controlsRef} enablePan={false} enableZoom={true} minDistance={20} maxDistance={150} autoRotate={rotationSpeed === 0 && sceneState === 'FORMED'} autoRotateSpeed={0.3} maxPolarAngle={Math.PI / 1.7} />
 
       <color attach="background" args={['#000300']} />
       <Stars radius={100} depth={50} count={5000} factor={4} saturation={0} fade speed={1} />
@@ -446,12 +495,12 @@ const Experience = ({ sceneState, rotationSpeed }: { sceneState: 'CHAOS' | 'FORM
           key={index}
           state={sceneState} 
           position={tree.pos as [number, number, number]} 
-          scale={tree.scale} 
+          scale={tree.scale}
+          showSanta={tree.santa}
         />
       ))}
 
       <EffectComposer>
-        {/* 稍微调整光晕，避免多棵树在一起太亮 */}
         <Bloom luminanceThreshold={0.8} luminanceSmoothing={0.1} intensity={1.2} radius={0.5} mipmapBlur />
         <Vignette eskil={false} offset={0.1} darkness={1.2} />
       </EffectComposer>
@@ -460,15 +509,12 @@ const Experience = ({ sceneState, rotationSpeed }: { sceneState: 'CHAOS' | 'FORM
 };
 
 // --- Gesture Controller ---
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const GestureController = ({ onGesture, onMove, onStatus, debugMode }: any) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-
   useEffect(() => {
     let gestureRecognizer: GestureRecognizer;
     let requestRef: number;
-
     const setup = async () => {
       onStatus("DOWNLOADING AI...");
       try {
@@ -490,14 +536,9 @@ const GestureController = ({ onGesture, onMove, onStatus, debugMode }: any) => {
             onStatus("AI READY: SHOW HAND");
             predictWebcam();
           }
-        } else {
-            onStatus("ERROR: CAMERA PERMISSION DENIED");
-        }
-      } catch (err: any) {
-        onStatus(`ERROR: ${err.message || 'MODEL FAILED'}`);
-      }
+        } else { onStatus("ERROR: CAMERA PERMISSION DENIED"); }
+      } catch (err: any) { onStatus(`ERROR: ${err.message || 'MODEL FAILED'}`); }
     };
-
     const predictWebcam = () => {
       if (gestureRecognizer && videoRef.current && canvasRef.current) {
         if (videoRef.current.videoWidth > 0) {
@@ -531,7 +572,6 @@ const GestureController = ({ onGesture, onMove, onStatus, debugMode }: any) => {
     setup();
     return () => cancelAnimationFrame(requestRef);
   }, [onGesture, onMove, onStatus, debugMode]);
-
   return (
     <>
       <video ref={videoRef} style={{ opacity: debugMode ? 0.6 : 0, position: 'fixed', top: 0, right: 0, width: debugMode ? '320px' : '1px', zIndex: debugMode ? 100 : -1, pointerEvents: 'none', transform: 'scaleX(-1)' }} playsInline muted autoPlay />
@@ -546,74 +586,35 @@ export default function GrandTreeApp() {
   const [rotationSpeed, setRotationSpeed] = useState(0);
   const [aiStatus, setAiStatus] = useState("INITIALIZING...");
   const [debugMode, setDebugMode] = useState(false);
-
-  // --- 音乐逻辑 ---
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  // 修改 1: 增加 e 参数，并阻止事件冒泡
   const toggleMusic = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation(); // <--- 关键：防止点击按钮触发全局的自动播放
+    e.stopPropagation();
     if (audioRef.current) {
-      if (isPlaying) {
-        audioRef.current.pause();
-      } else {
-        audioRef.current.play().catch((e) => console.log('播放失败:', e));
-      }
+      if (isPlaying) { audioRef.current.pause(); } else { audioRef.current.play().catch((e) => console.log('播放失败:', e)); }
       setIsPlaying(!isPlaying);
     }
   };
 
-  // 修改 2: 依赖数组设为 []，只在加载时运行一次，并且通过 audioRef 判断状态
   useEffect(() => {
     const handleFirstInteraction = () => {
-      // 直接检查 audio 元素是否处于暂停状态，而不是依赖 isPlaying 变量
       if (audioRef.current && audioRef.current.paused) {
-        audioRef.current.play()
-          .then(() => setIsPlaying(true))
-          .catch(() => { /* 忽略自动播放失败 */ });
+        audioRef.current.play().then(() => setIsPlaying(true)).catch(() => {});
       }
     };
-
-    // { once: true } 确保这个监听器触发一次后就自动自我销毁
     window.addEventListener('click', handleFirstInteraction, { once: true });
     window.addEventListener('touchstart', handleFirstInteraction, { once: true });
-
     return () => {
       window.removeEventListener('click', handleFirstInteraction);
       window.removeEventListener('touchstart', handleFirstInteraction);
     };
-  }, []); // <--- 关键：这里留空，不要填 [isPlaying]
+  }, []);
 
   return (
     <div style={{ width: '100vw', height: '100vh', backgroundColor: '#000', position: 'relative', overflow: 'hidden' }}>
-      
-      {/* 背景音乐播放器 */}
       <audio ref={audioRef} src="/bgm.mp3" loop />
-      
-      {/* --- 修改：左上角音乐开关按钮 (防止遮挡 Debug 画面) --- */}
-      <button 
-        onClick={toggleMusic}
-        style={{
-          position: 'absolute',
-          top: '20px',
-          left: '20px',  // <--- 关键修改：从 right 改成了 left
-          zIndex: 20,
-          width: '40px',
-          height: '40px',
-          borderRadius: '50%',
-          backgroundColor: 'rgba(0,0,0,0.5)',
-          border: '1px solid rgba(255, 215, 0, 0.5)',
-          color: '#FFD700',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          backdropFilter: 'blur(4px)',
-          fontSize: '20px',
-          userSelect: 'none'
-        }}
-      >
+      <button onClick={toggleMusic} style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 20, width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255, 215, 0, 0.5)', color: '#FFD700', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', backdropFilter: 'blur(4px)', fontSize: '20px', userSelect: 'none' }}>
         {isPlaying ? '♪' : '✕'}
       </button>
 
@@ -624,7 +625,6 @@ export default function GrandTreeApp() {
       </div>
       <GestureController onGesture={setSceneState} onMove={setRotationSpeed} onStatus={setAiStatus} debugMode={debugMode} />
 
-      {/* UI - Stats */}
       <div style={{ position: 'absolute', bottom: '30px', left: '40px', color: '#888', zIndex: 10, fontFamily: 'sans-serif', userSelect: 'none' }}>
         <div style={{ marginBottom: '15px' }}>
           <p style={{ fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '4px' }}>Memories</p>
@@ -635,12 +635,11 @@ export default function GrandTreeApp() {
         <div>
           <p style={{ fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '4px' }}>Foliage</p>
           <p style={{ fontSize: '24px', color: '#004225', fontWeight: 'bold', margin: 0 }}>
-            {(CONFIG.counts.foliage / 1000).toFixed(0)}K <span style={{ fontSize: '10px', color: '#555', fontWeight: 'normal' }}>EMERALD NEEDLES</span>
+            {(CONFIG.counts.foliage * 3 / 1000).toFixed(0)}K <span style={{ fontSize: '10px', color: '#555', fontWeight: 'normal' }}>FOREST NEEDLES</span>
           </p>
         </div>
       </div>
 
-      {/* UI - Buttons */}
       <div style={{ position: 'absolute', bottom: '30px', right: '40px', zIndex: 10, display: 'flex', gap: '10px' }}>
         <button onClick={() => setDebugMode(!debugMode)} style={{ padding: '12px 15px', backgroundColor: debugMode ? '#FFD700' : 'rgba(0,0,0,0.5)', border: '1px solid #FFD700', color: debugMode ? '#000' : '#FFD700', fontFamily: 'sans-serif', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', backdropFilter: 'blur(4px)' }}>
            {debugMode ? 'HIDE DEBUG' : '🛠 DEBUG'}
@@ -650,7 +649,6 @@ export default function GrandTreeApp() {
         </button>
       </div>
 
-      {/* UI - AI Status */}
       <div style={{ position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', color: aiStatus.includes('ERROR') ? '#FF0000' : 'rgba(255, 215, 0, 0.4)', fontSize: '10px', letterSpacing: '2px', zIndex: 10, background: 'rgba(0,0,0,0.5)', padding: '4px 8px', borderRadius: '4px' }}>
         {aiStatus}
       </div>
