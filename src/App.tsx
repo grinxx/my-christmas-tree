@@ -35,16 +35,16 @@ const CONFIG = {
     warmLight: '#FFD54F',
     lights: ['#FF0000', '#00FF00', '#0000FF', '#FFFF00'],
     borders: ['#FFFAF0', '#F0E68C', '#E6E6FA', '#FFB6C1', '#98FB98', '#87CEFA', '#FFDAB9'],
-    giftColors: ['#B71C1C', '#1A237E', '#004D40', '#F57F17', '#4A148C'], // 更深邃的高级礼物色
+    giftColors: ['#B71C1C', '#1A237E', '#004D40', '#F57F17', '#4A148C'], 
     ribbonColors: ['#FFD700', '#C0C0C0', '#FFFFFF']
   },
   counts: {
-    foliage: 7000,    // <--- 优化：降低到 7000 以保证 3 棵树流畅运行
-    ornaments: 200,   // 每棵树的照片数
+    foliage: 7000,    
+    ornaments: 200,   
     elements: 150,
     lights: 300
   },
-  tree: { height: 32, radius: 12 }, // 树稍微调高大一点
+  tree: { height: 32, radius: 12 }, 
   photos: {
     body: bodyPhotoPaths
   }
@@ -453,7 +453,7 @@ const TreeGroup = ({ state, position, scale = 1, showSanta = false }: { state: '
         <FairyLights state={state} />
         <TopStar state={state} />
       </Suspense>
-      <Sparkles count={Math.floor(200 * scale)}cF scale={50 * scale} size={6} speed={0.4} opacity={0.4} color={CONFIG.colors.silver} />
+      <Sparkles count={Math.floor(200 * scale)} scale={50 * scale} size={6} speed={0.4} opacity={0.4} color={CONFIG.colors.silver} />
     </group>
   );
 };
