@@ -510,8 +510,70 @@ export default function GrandTreeApp() {
   const [aiStatus, setAiStatus] = useState("INITIALIZING...");
   const [debugMode, setDebugMode] = useState(false);
 
+  // --- 新增：音乐逻辑 ---
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+
+  const toggleMusic = () => {
+    if (audioRef.current) {
+      if (isPlaying) {
+        audioRef.current.pause();
+      } else {
+        audioRef.current.play().catch((e) => console.log('播放失败:', e));
+      }
+      setIsPlaying(!isPlaying);
+    }
+  };
+
+  // 尝试在首次交互（点击或触摸）时自动播放
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      if (audioRef.current && !isPlaying) {
+        audioRef.current.play()
+          .then(() => setIsPlaying(true))
+          .catch(() => { /* 忽略自动播放失败的报错 */ });
+      }
+    };
+    window.addEventListener('click', handleFirstInteraction, { once: true });
+    window.addEventListener('touchstart', handleFirstInteraction, { once: true });
+    return () => {
+      window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
+    };
+  }, [isPlaying]);
+
   return (
     <div style={{ width: '100vw', height: '100vh', backgroundColor: '#000', position: 'relative', overflow: 'hidden' }}>
+      
+      {/* --- 新增：背景音乐播放器 (隐藏) --- */}
+      <audio ref={audioRef} src="/bgm.mp3" loop />
+      
+      {/* --- 新增：右上角音乐开关按钮 --- */}
+      <button 
+        onClick={toggleMusic}
+        style={{
+          position: 'absolute',
+          top: '20px',
+          right: '20px',
+          zIndex: 20,
+          width: '40px',
+          height: '40px',
+          borderRadius: '50%',
+          backgroundColor: 'rgba(0,0,0,0.5)',
+          border: '1px solid rgba(255, 215, 0, 0.5)',
+          color: '#FFD700',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          backdropFilter: 'blur(4px)',
+          fontSize: '20px',
+          userSelect: 'none'
+        }}
+      >
+        {isPlaying ? '♪' : '✕'}
+      </button>
+
       <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, zIndex: 1 }}>
         <Canvas dpr={[1, 2]} gl={{ toneMapping: THREE.ReinhardToneMapping }} shadows>
             <Experience sceneState={sceneState} rotationSpeed={rotationSpeed} />
