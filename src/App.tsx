@@ -149,7 +149,7 @@ const PhotoOrnaments = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
     });
   }, [textures, count]);
 
-  useFrame((stateObj, delta) => {
+  useFrame((_, delta) => {
     if (!groupRef.current) return;
     const isFormed = state === 'FORMED';
     groupRef.current.children.forEach((group, i) => {
@@ -357,29 +357,32 @@ const GroundGifts = ({ state, treeRadius }: { state: 'CHAOS' | 'FORMED', treeRad
 const ToySanta = ({ state, position }: { state: 'CHAOS' | 'FORMED', position: [number, number, number] }) => {
   const groupRef = useRef<THREE.Group>(null);
   
-  useFrame((stateObj) => {
+  // 修改：将参数名改为 _stateObj，或者直接解构出 clock
+  useFrame((_stateObj) => {
      if(groupRef.current && state === 'FORMED') {
          // 让圣诞老人轻轻摇晃，像是不倒翁
-         const t = stateObj.clock.elapsedTime;
+         // 注意：这里我们确实用到了它！如果你的编辑器还报错，可能是误报，但加上下划线 _stateObj 通常能解决
+         const t = _stateObj.clock.elapsedTime; 
          groupRef.current.rotation.z = Math.sin(t * 2) * 0.1;
          groupRef.current.rotation.y = Math.sin(t * 1) * 0.1;
      }
   });
 
-  // 身体材质
+  // ... (下面的 return 内容保持不变) ...
+  // 为节省篇幅，这里省略 return 部分，你只需要替换上面的 useFrame 部分即可
+  // 如果你想替换整个 ToySanta 组件，请看下面：
+  
   const matRed = new THREE.MeshStandardMaterial({ color: '#D32F2F', roughness: 0.3 });
   const matWhite = new THREE.MeshStandardMaterial({ color: '#FFFFFF', roughness: 0.8 });
-  const matFace = new THREE.MeshStandardMaterial({ color: '#FFCCBC', roughness: 0.5 }); // 肤色
+  const matFace = new THREE.MeshStandardMaterial({ color: '#FFCCBC', roughness: 0.5 });
   const matBlack = new THREE.MeshStandardMaterial({ color: '#222222', roughness: 0.5 });
 
   return (
     <group ref={groupRef} position={position} scale={state === 'FORMED' ? 1.5 : 0}>
-      {/* 身体 (胖圆柱) */}
       <mesh position={[0, 2.5, 0]}>
          <cylinderGeometry args={[1.5, 2, 3, 16]} />
          <primitive object={matRed} attach="material" />
       </mesh>
-      {/* 裤子/腿 */}
       <mesh position={[-0.8, 0.5, 0]}>
          <cylinderGeometry args={[0.6, 0.6, 1.5, 16]} />
          <primitive object={matRed} attach="material" />
@@ -388,7 +391,6 @@ const ToySanta = ({ state, position }: { state: 'CHAOS' | 'FORMED', position: [n
          <cylinderGeometry args={[0.6, 0.6, 1.5, 16]} />
          <primitive object={matRed} attach="material" />
       </mesh>
-      {/* 靴子 */}
       <mesh position={[-0.8, -0.5, 0.2]}>
          <boxGeometry args={[0.7, 0.5, 1]} />
          <primitive object={matBlack} attach="material" />
@@ -397,22 +399,18 @@ const ToySanta = ({ state, position }: { state: 'CHAOS' | 'FORMED', position: [n
          <boxGeometry args={[0.7, 0.5, 1]} />
          <primitive object={matBlack} attach="material" />
       </mesh>
-      {/* 头 */}
       <mesh position={[0, 4.5, 0]}>
          <sphereGeometry args={[1.2, 32, 32]} />
          <primitive object={matFace} attach="material" />
       </mesh>
-      {/* 胡子 (大白球) */}
       <mesh position={[0, 4.0, 0.8]}>
          <sphereGeometry args={[0.8, 16, 16]} />
          <primitive object={matWhite} attach="material" />
       </mesh>
-      {/* 帽子 */}
       <mesh position={[0, 5.5, 0]} rotation={[0.2, 0, 0]}>
          <coneGeometry args={[1.3, 2.5, 32]} />
          <primitive object={matRed} attach="material" />
       </mesh>
-      {/* 胳膊 (挥手) */}
       <group position={[1.8, 3.5, 0]} rotation={[0, 0, -0.5]}>
          <mesh>
             <capsuleGeometry args={[0.4, 1.5, 4, 8]} />
