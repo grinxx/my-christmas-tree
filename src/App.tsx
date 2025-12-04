@@ -510,11 +510,13 @@ export default function GrandTreeApp() {
   const [aiStatus, setAiStatus] = useState("INITIALIZING...");
   const [debugMode, setDebugMode] = useState(false);
 
-  // --- 新增：音乐逻辑 ---
+  // --- 音乐逻辑 ---
   const audioRef = useRef<HTMLAudioElement>(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  const toggleMusic = () => {
+  // 修改 1: 增加 e 参数，并阻止事件冒泡
+  const toggleMusic = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.stopPropagation(); // <--- 关键：防止点击按钮触发全局的自动播放
     if (audioRef.current) {
       if (isPlaying) {
         audioRef.current.pause();
@@ -525,30 +527,34 @@ export default function GrandTreeApp() {
     }
   };
 
-  // 尝试在首次交互（点击或触摸）时自动播放
+  // 修改 2: 依赖数组设为 []，只在加载时运行一次，并且通过 audioRef 判断状态
   useEffect(() => {
     const handleFirstInteraction = () => {
-      if (audioRef.current && !isPlaying) {
+      // 直接检查 audio 元素是否处于暂停状态，而不是依赖 isPlaying 变量
+      if (audioRef.current && audioRef.current.paused) {
         audioRef.current.play()
           .then(() => setIsPlaying(true))
-          .catch(() => { /* 忽略自动播放失败的报错 */ });
+          .catch(() => { /* 忽略自动播放失败 */ });
       }
     };
+
+    // { once: true } 确保这个监听器触发一次后就自动自我销毁
     window.addEventListener('click', handleFirstInteraction, { once: true });
     window.addEventListener('touchstart', handleFirstInteraction, { once: true });
+
     return () => {
       window.removeEventListener('click', handleFirstInteraction);
       window.removeEventListener('touchstart', handleFirstInteraction);
     };
-  }, [isPlaying]);
+  }, []); // <--- 关键：这里留空，不要填 [isPlaying]
 
   return (
     <div style={{ width: '100vw', height: '100vh', backgroundColor: '#000', position: 'relative', overflow: 'hidden' }}>
       
-      {/* --- 新增：背景音乐播放器 (隐藏) --- */}
+      {/* 背景音乐播放器 */}
       <audio ref={audioRef} src="/bgm.mp3" loop />
       
-      {/* --- 新增：右上角音乐开关按钮 --- */}
+      {/* 音乐开关按钮 */}
       <button 
         onClick={toggleMusic}
         style={{
