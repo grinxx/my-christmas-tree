@@ -577,7 +577,70 @@ const GestureController = ({ onGesture, onMove, onStatus, debugMode }: any) => {
     </>
   );
 };
+// --- 新增：网络/VPN 提示遮罩层 ---
+const NetworkWarning = ({ aiStatus }: { aiStatus: string }) => {
+  const [showWarning, setShowWarning] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
 
+  useEffect(() => {
+    // 如果 AI 准备好了，或者报错了，都算“有了结果”，取消加载等待
+    if (aiStatus.includes("READY") || aiStatus.includes("ERROR")) {
+      setIsLoaded(true);
+      setShowWarning(false);
+      return;
+    }
+
+    // 如果 6 秒后还没有加载完，就显示 VPN 提示
+    const timer = setTimeout(() => {
+      if (!isLoaded) {
+        setShowWarning(true);
+      }
+    }, 6000); // 6000ms = 6秒
+
+    return () => clearTimeout(timer);
+  }, [aiStatus, isLoaded]);
+
+  // 如果已经加载成功，不显示任何东西
+  if (isLoaded && !showWarning) return null;
+
+  return (
+    <div style={{
+      position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+      zIndex: 999,
+      pointerEvents: 'none', // 让点击能穿透，不阻挡操作
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      transition: 'opacity 0.5s'
+    }}>
+      {/* 加载中的提示 */}
+      {!showWarning && !isLoaded && (
+        <div style={{ background: 'rgba(0,0,0,0.6)', padding: '10px 20px', borderRadius: '20px', backdropFilter: 'blur(4px)', color: '#FFD700', border: '1px solid #FFD700' }}>
+          ✨ LOADING MAGIC...
+        </div>
+      )}
+
+      {/* 超时警告提示 (带 VPN 建议) */}
+      {showWarning && (
+        <div style={{
+          background: 'rgba(50, 0, 0, 0.85)',
+          padding: '20px 30px',
+          borderRadius: '12px',
+          border: '1px solid #ff4444',
+          textAlign: 'center',
+          backdropFilter: 'blur(10px)',
+          maxWidth: '80%',
+          pointerEvents: 'auto' // 这个提示框允许点击（如果有按钮的话）
+        }}>
+          <h3 style={{ color: '#ff4444', margin: '0 0 10px 0', fontSize: '18px' }}>⚠️ Connection Slow</h3>
+          <p style={{ color: '#fff', fontSize: '14px', lineHeight: '1.5', margin: 0 }}>
+            AI 模型加载超时。如果您在中国大陆，<br/>
+            <strong>请开启 VPN 或加速器</strong> 以体验手势交互。<br/>
+            <span style={{ fontSize: '12px', color: '#888', display: 'block', marginTop: '8px' }}>(资源来自 Google 服务器)</span>
+          </p>
+        </div>
+      )}
+    </div>
+  );
+};
 // --- App Entry ---
 export default function GrandTreeApp() {
   const [sceneState, setSceneState] = useState<'CHAOS' | 'FORMED'>('CHAOS');
@@ -611,7 +674,12 @@ export default function GrandTreeApp() {
 
   return (
     <div style={{ width: '100vw', height: '100vh', backgroundColor: '#000', position: 'relative', overflow: 'hidden' }}>
+      
+      {/* --- 新增：在这里插入刚才写的网络检测组件 --- */}
+      <NetworkWarning aiStatus={aiStatus} />
+
       <audio ref={audioRef} src="/bgm.mp3" loop />
+      {/* 音乐按钮 (已在左上角) */}
       <button onClick={toggleMusic} style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 20, width: '40px', height: '40px', borderRadius: '50%', backgroundColor: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255, 215, 0, 0.5)', color: '#FFD700', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', backdropFilter: 'blur(4px)', fontSize: '20px', userSelect: 'none' }}>
         {isPlaying ? '♪' : '✕'}
       </button>
@@ -646,7 +714,8 @@ export default function GrandTreeApp() {
            {sceneState === 'CHAOS' ? 'Assemble Tree' : 'Disperse'}
         </button>
       </div>
-
+      
+      {/* 这里的旧状态提示可以保留，作为技术调试信息 */}
       <div style={{ position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', color: aiStatus.includes('ERROR') ? '#FF0000' : 'rgba(255, 215, 0, 0.4)', fontSize: '10px', letterSpacing: '2px', zIndex: 10, background: 'rgba(0,0,0,0.5)', padding: '4px 8px', borderRadius: '4px' }}>
         {aiStatus}
       </div>
